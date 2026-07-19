@@ -361,6 +361,66 @@ function vertex(p5, fn){
   };
 
   /**
+   * Adds an elliptical arc segment to a custom shape.
+   *
+   * `arcVertex()` adds a curved segment to custom shapes, similar to
+   * <a href="#/p5/bezierVertex">bezierVertex()</a>. It must be called between
+   * the <a href="#/p5/beginShape">beginShape()</a> and
+   * <a href="#/p5/endShape">endShape()</a> functions, and the shape must
+   * already have at least one vertex: the arc starts at the shape's previous
+   * vertex and ends at the point `(x, y)`.
+   *
+   * The arc is a piece of an ellipse, described the same way as in SVG paths.
+   * The first two parameters, `w` and `h`, set the ellipse's width and
+   * height, as in <a href="#/p5/arc">arc()</a>. The third parameter, `angle`,
+   * rotates the ellipse's x-axis, and is given in radians. If the ellipse's
+   * radii are too small for the arc to reach `(x, y)`, they're scaled up
+   * uniformly until it can.
+   *
+   * Two ellipses of a given size pass through both endpoints, so four
+   * different arcs can connect them. The fourth parameter, `type`, chooses
+   * the shorter (`MINOR`) or longer (`MAJOR`) way around the ellipse. The
+   * fifth parameter, `direction`, sets whether the arc bends `CLOCKWISE` or
+   * `COUNTERCLOCKWISE` as it travels from the previous vertex to `(x, y)`.
+   *
+   * Note: `arcVertex()` won’t work when an argument is passed to
+   * <a href="#/p5/beginShape">beginShape()</a>.
+   *
+   * @method arcVertex
+   * @param  {Number} w width of the arc's ellipse.
+   * @param  {Number} h height of the arc's ellipse.
+   * @param  {Number} angle rotation of the arc's ellipse in radians.
+   * @param  {(MINOR|MAJOR)} type either MINOR or MAJOR.
+   * @param  {(CLOCKWISE|COUNTERCLOCKWISE)} direction either CLOCKWISE or COUNTERCLOCKWISE.
+   * @param  {Number} x x-coordinate of the arc's endpoint.
+   * @param  {Number} y y-coordinate of the arc's endpoint.
+   *
+   * @example
+   * function setup() {
+   *   createCanvas(100, 100);
+   *
+   *   background(200);
+   *
+   *   // Start drawing the shape.
+   *   beginShape();
+   *
+   *   // Add the first anchor point.
+   *   vertex(20, 50);
+   *
+   *   // Add an arc that bends up to the endpoint.
+   *   arcVertex(60, 60, 0, MINOR, CLOCKWISE, 80, 50);
+   *
+   *   // Stop drawing the shape.
+   *   endShape(CLOSE);
+   *
+   *   describe('A white arch shape on a gray background.');
+   * }
+   */
+  fn.arcVertex = function(...args) {
+    this._renderer.arcVertex(...args);
+  };
+
+  /**
    * Adds a Bézier curve segment to a custom shape.
    *
    * `bezierVertex()` adds a curved segment to custom shapes. The Bézier curves

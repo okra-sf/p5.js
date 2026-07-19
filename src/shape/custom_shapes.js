@@ -267,6 +267,143 @@ class BezierSegment extends Segment {
 }
 
 /*
+An elliptical arc from the previous vertex to the vertex passed to
+arcVertex(), described with an SVG-style endpoint parameterization:
+half-axes are given by w/2 and h/2, the ellipse may be rotated by
+`angle`, and the type (MINOR/MAJOR) and direction
+(CLOCKWISE/COUNTERCLOCKWISE) flags select one of the four arcs
+connecting the two endpoints (#6459).
+*/
+class ArcSegment extends Segment {
+  #vertexCapacity = 1;
+  #w;
+  #h;
+  #angle;
+  #type;
+  #direction;
+
+  constructor(params, ...vertices) {
+    super(...vertices);
+    this.#w = params.w;
+    this.#h = params.h;
+    this.#angle = params.angle;
+    this.#type = params.type;
+    this.#direction = params.direction;
+  }
+
+  get vertexCapacity() {
+    return this.#vertexCapacity;
+  }
+
+  get w() {
+    return this.#w;
+  }
+
+  get h() {
+    return this.#h;
+  }
+
+  get angle() {
+    return this.#angle;
+  }
+
+  get type() {
+    return this.#type;
+  }
+
+  get direction() {
+    return this.#direction;
+  }
+
+  #_centerParameterization;
+  // Convert the SVG-style endpoint parameterization to a center
+  // parameterization (SVG 1.1 spec, appendix F.6), including the
+  // radius-scaling correction for endpoints that are too far apart
+  // (F.6.6). Degenerate arcs (coincident endpoints or a zero radius)
+  // are rendered as a straight line to the endpoint (F.6.2).
+  _getCenterParameterization() {
+    if (this.#_centerParameterization === undefined) {
+      const start = this.getStartVertex().position;
+      const end = this.getEndVertex().position;
+      let rx = Math.abs(this.#w) / 2;
+      let ry = Math.abs(this.#h) / 2;
+      const rotation = this.#angle;
+      const largeArc = this.#type === constants.MAJOR;
+      // In p5's y-down coordinate system, increasing angles sweep
+      // clockwise on screen, so CLOCKWISE maps to SVG's sweep flag
+      const sweep = this.#direction === constants.CLOCKWISE;
+
+      if (rx === 0 || ry === 0 || (start.x === end.x && start.y === end.y)) {
+        this.#_centerParameterization = { degenerate: true };
+        return this.#_centerParameterization;
+      }
+
+      const cosPhi = Math.cos(rotation);
+      const sinPhi = Math.sin(rotation);
+
+      // F.6.5.1: transform the endpoints into the ellipse's frame
+      const dx = (start.x - end.x) / 2;
+      const dy = (start.y - end.y) / 2;
+      const x1p = cosPhi * dx + sinPhi * dy;
+      const y1p = -sinPhi * dx + cosPhi * dy;
+
+      // F.6.6: scale the radii up if the endpoints are too far apart
+      const lambda = (x1p * x1p) / (rx * rx) + (y1p * y1p) / (ry * ry);
+      if (lambda > 1) {
+        const scale = Math.sqrt(lambda);
+        rx *= scale;
+        ry *= scale;
+      }
+
+      // F.6.5.2: compute the center in the ellipse's frame
+      const rx2 = rx * rx;
+      const ry2 = ry * ry;
+      const x1p2 = x1p * x1p;
+      const y1p2 = y1p * y1p;
+      let coefficient = Math.sqrt(Math.max(
+        0,
+        (rx2 * ry2 - rx2 * y1p2 - ry2 * x1p2) / (rx2 * y1p2 + ry2 * x1p2)
+      ));
+      if (largeArc === sweep) {
+        coefficient = -coefficient;
+      }
+      const cxp = coefficient * rx * y1p / ry;
+      const cyp = -coefficient * ry * x1p / rx;
+
+      // F.6.5.3: transform the center back
+      const cx = cosPhi * cxp - sinPhi * cyp + (start.x + end.x) / 2;
+      const cy = sinPhi * cxp + cosPhi * cyp + (start.y + end.y) / 2;
+
+      // F.6.5.5/F.6.5.6: compute the start angle and sweep extent
+      const startAngle = Math.atan2((y1p - cyp) / ry, (x1p - cxp) / rx);
+      const endAngle = Math.atan2((-y1p - cyp) / ry, (-x1p - cxp) / rx);
+      let deltaAngle = endAngle - startAngle;
+      if (sweep && deltaAngle < 0) {
+        deltaAngle += 2 * Math.PI;
+      } else if (!sweep && deltaAngle > 0) {
+        deltaAngle -= 2 * Math.PI;
+      }
+
+      this.#_centerParameterization = {
+        degenerate: false,
+        cx,
+        cy,
+        rx,
+        ry,
+        rotation,
+        startAngle,
+        deltaAngle
+      };
+    }
+    return this.#_centerParameterization;
+  }
+
+  accept(visitor) {
+    visitor.visitArcSegment(this);
+  }
+}
+
+/*
 To-do: Consider type and end modes -- see #6766
 may want to use separate classes, but maybe not
 
@@ -636,6 +773,13 @@ const defaultPrimitiveShapeCreators = {
   splineVertex: {
     [constants.EMPTY_PATH]: (...vertices) => new Anchor(...vertices),
     [constants.PATH]: (...vertices) => new SplineSegment(...vertices)
+  },
+  // arcVertex creators all take arc parameters and vertices so they can be
+  // called in a uniform way
+  arcVertex: {
+    [constants.EMPTY_PATH]: (params, ...vertices) => new Anchor(...vertices),
+    [constants.PATH]: (params, ...vertices) =>
+      new ArcSegment(params, ...vertices)
   }
 };
 
@@ -651,6 +795,7 @@ class Shape {
   #initialVertexProperties;
   #primitiveShapeCreators;
   #bezierOrder = 3;
+  #arcParams = null;
   kind = null;
   contours = [];
   _splineProperties = {
@@ -930,7 +1075,9 @@ class Shape {
 
     return  vertexKind === 'bezierVertex' ?
       primitiveShapeCreator(this.#bezierOrder, ...vertices) :
-      primitiveShapeCreator(...vertices);
+      vertexKind === 'arcVertex' ?
+        primitiveShapeCreator(this.#arcParams, ...vertices) :
+        primitiveShapeCreator(...vertices);
   }
 
   /*
@@ -999,7 +1146,8 @@ class Shape {
     this.#generalVertex('splineVertex', position, textureCoordinates);
   }
 
-  arcVertex(position, textureCoordinates) {
+  arcVertex(position, textureCoordinates, params) {
+    this.#arcParams = params;
     this.#generalVertex('arcVertex', position, textureCoordinates);
   }
 
@@ -1274,6 +1422,25 @@ class PrimitiveToPath2DConverter extends PrimitiveVisitor {
         break;
     }
   }
+  visitArcSegment(arcSegment) {
+    const endVertex = arcSegment.getEndVertex();
+    const arc = arcSegment._getCenterParameterization();
+
+    if (arc.degenerate) {
+      this.path.lineTo(endVertex.position.x, endVertex.position.y);
+    } else {
+      this.path.ellipse(
+        arc.cx,
+        arc.cy,
+        arc.rx,
+        arc.ry,
+        arc.rotation,
+        arc.startAngle,
+        arc.startAngle + arc.deltaAngle,
+        arc.deltaAngle < 0
+      );
+    }
+  }
   visitSplineSegment(splineSegment) {
     const shape = splineSegment._shape;
 
@@ -1528,6 +1695,41 @@ class PrimitiveToVerticesConverter extends PrimitiveVisitor {
             : bezierSegment._shape.evaluateQuadraticBezier(vertexArrays, t)
         )
       );
+    }
+  }
+  visitArcSegment(arcSegment) {
+    const shape = arcSegment._shape;
+    const contour = this.lastContour();
+    const endVertex = arcSegment.getEndVertex();
+    const arc = arcSegment._getCenterParameterization();
+
+    if (arc.degenerate) {
+      contour.push(endVertex);
+      return;
+    }
+
+    const avgRadius = (arc.rx + arc.ry) / 2;
+    const arcLength = avgRadius * Math.abs(arc.deltaAngle);
+    const numPoints = Math.max(1, Math.ceil(arcLength * this.curveDetail));
+
+    const startArray = shape.vertexToArray(arcSegment.getStartVertex());
+    const endArray = shape.vertexToArray(endVertex);
+    const cosPhi = Math.cos(arc.rotation);
+    const sinPhi = Math.sin(arc.rotation);
+    for (let i = 0; i < numPoints; i++) {
+      const t = (i + 1) / numPoints;
+      // Interpolate non-positional vertex properties linearly from the
+      // start vertex to the end vertex, then place the vertex on the arc
+      const vertex = shape.arrayToVertex(shape.arraySum(
+        shape.arrayScale(startArray, 1 - t),
+        shape.arrayScale(endArray, t)
+      ));
+      const theta = arc.startAngle + arc.deltaAngle * t;
+      const x = arc.rx * Math.cos(theta);
+      const y = arc.ry * Math.sin(theta);
+      vertex.position.x = arc.cx + cosPhi * x - sinPhi * y;
+      vertex.position.y = arc.cy + sinPhi * x + cosPhi * y;
+      contour.push(vertex);
     }
   }
   visitSplineSegment(splineSegment) {

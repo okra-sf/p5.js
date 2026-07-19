@@ -38,6 +38,115 @@ suite('Vertex', function() {
     });
   });
 
+  suite('p5.prototype.arcVertex', function() {
+    test('should be a function', function() {
+      assert.ok(myp5.arcVertex);
+      assert.typeOf(myp5.arcVertex, 'function');
+    });
+
+    test('creates one arc segment per call', function() {
+      myp5.beginShape();
+      myp5.vertex(10, 0);
+      myp5.arcVertex(20, 20, 0, myp5.MINOR, myp5.CLOCKWISE, 0, 10);
+      const shape = myp5._renderer.currentShape;
+      const primitives = shape.contours[0].primitives;
+      assert.equal(primitives.length, 2);
+      const segment = primitives[1];
+      assert.equal(segment.vertexCount, 1);
+      assert.equal(segment.w, 20);
+      assert.equal(segment.h, 20);
+      assert.equal(segment.angle, 0);
+      assert.equal(segment.type, myp5.MINOR);
+      assert.equal(segment.direction, myp5.CLOCKWISE);
+      assert.equal(segment.getEndVertex().position.x, 0);
+      assert.equal(segment.getEndVertex().position.y, 10);
+    });
+
+    test('creates an anchor when called before any other vertex', function() {
+      // same behavior as bezierVertex(): the first call adds an anchor
+      myp5.beginShape();
+      myp5.arcVertex(20, 20, 0, myp5.MINOR, myp5.CLOCKWISE, 10, 0);
+      const shape = myp5._renderer.currentShape;
+      const primitives = shape.contours[0].primitives;
+      assert.equal(primitives.length, 1);
+      assert.equal(primitives[0].getEndVertex().position.x, 10);
+      assert.equal(primitives[0].getEndVertex().position.y, 0);
+    });
+
+    // Builds a shape with a single arc from (10, 0) to (0, 10) with both
+    // radii equal to 10, and returns the arc's center parameterization
+    function quarterArc(type, direction) {
+      myp5.beginShape();
+      myp5.vertex(10, 0);
+      myp5.arcVertex(20, 20, 0, type, direction, 0, 10);
+      const shape = myp5._renderer.currentShape;
+      return shape.contours[0].primitives[1]._getCenterParameterization();
+    }
+
+    test('computes the center parameterization of a quarter circle', function() {
+      const arc = quarterArc(myp5.MINOR, myp5.CLOCKWISE);
+      assert.closeTo(arc.cx, 0, 1e-10);
+      assert.closeTo(arc.cy, 0, 1e-10);
+      assert.closeTo(arc.rx, 10, 1e-10);
+      assert.closeTo(arc.ry, 10, 1e-10);
+      assert.closeTo(arc.startAngle, 0, 1e-10);
+      assert.closeTo(arc.deltaAngle, Math.PI / 2, 1e-10);
+    });
+
+    test('type and direction flags select the four distinct arcs', function() {
+      const minorCW = quarterArc(myp5.MINOR, myp5.CLOCKWISE);
+      assert.closeTo(minorCW.cx, 0, 1e-10);
+      assert.closeTo(minorCW.cy, 0, 1e-10);
+      assert.closeTo(minorCW.deltaAngle, Math.PI / 2, 1e-10);
+
+      const minorCCW = quarterArc(myp5.MINOR, myp5.COUNTERCLOCKWISE);
+      assert.closeTo(minorCCW.cx, 10, 1e-10);
+      assert.closeTo(minorCCW.cy, 10, 1e-10);
+      assert.closeTo(minorCCW.deltaAngle, -Math.PI / 2, 1e-10);
+
+      const majorCW = quarterArc(myp5.MAJOR, myp5.CLOCKWISE);
+      assert.closeTo(majorCW.cx, 10, 1e-10);
+      assert.closeTo(majorCW.cy, 10, 1e-10);
+      assert.closeTo(majorCW.deltaAngle, 3 * Math.PI / 2, 1e-10);
+
+      const majorCCW = quarterArc(myp5.MAJOR, myp5.COUNTERCLOCKWISE);
+      assert.closeTo(majorCCW.cx, 0, 1e-10);
+      assert.closeTo(majorCCW.cy, 0, 1e-10);
+      assert.closeTo(majorCCW.deltaAngle, -3 * Math.PI / 2, 1e-10);
+    });
+
+    test('scales radii up when the endpoints are too far apart', function() {
+      myp5.beginShape();
+      myp5.vertex(0, 0);
+      myp5.arcVertex(10, 10, 0, myp5.MINOR, myp5.CLOCKWISE, 20, 0);
+      const shape = myp5._renderer.currentShape;
+      const arc = shape.contours[0].primitives[1]._getCenterParameterization();
+      assert.closeTo(arc.rx, 10, 1e-10);
+      assert.closeTo(arc.ry, 10, 1e-10);
+      assert.closeTo(arc.cx, 10, 1e-10);
+      assert.closeTo(arc.cy, 0, 1e-10);
+      assert.closeTo(Math.abs(arc.deltaAngle), Math.PI, 1e-10);
+    });
+
+    test('treats coincident endpoints as a straight line', function() {
+      myp5.beginShape();
+      myp5.vertex(10, 0);
+      myp5.arcVertex(20, 20, 0, myp5.MINOR, myp5.CLOCKWISE, 10, 0);
+      const shape = myp5._renderer.currentShape;
+      const arc = shape.contours[0].primitives[1]._getCenterParameterization();
+      assert.isTrue(arc.degenerate);
+    });
+
+    test('treats a zero radius as a straight line', function() {
+      myp5.beginShape();
+      myp5.vertex(10, 0);
+      myp5.arcVertex(0, 20, 0, myp5.MINOR, myp5.CLOCKWISE, 0, 10);
+      const shape = myp5._renderer.currentShape;
+      const arc = shape.contours[0].primitives[1]._getCenterParameterization();
+      assert.isTrue(arc.degenerate);
+    });
+  });
+
   suite('p5.prototype.endShape', function() {
     test('should be a function', function() {
       assert.ok(myp5.endShape);

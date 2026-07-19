@@ -704,6 +704,30 @@ export const CHORD = 'chord';
  */
 export const PIE = 'pie';
 /**
+ * @typedef {'minor'} MINOR
+ * @property {MINOR} MINOR
+ * @final
+ */
+export const MINOR = 'minor';
+/**
+ * @typedef {'major'} MAJOR
+ * @property {MAJOR} MAJOR
+ * @final
+ */
+export const MAJOR = 'major';
+/**
+ * @typedef {'clockwise'} CLOCKWISE
+ * @property {CLOCKWISE} CLOCKWISE
+ * @final
+ */
+export const CLOCKWISE = 'clockwise';
+/**
+ * @typedef {'counterclockwise'} COUNTERCLOCKWISE
+ * @property {COUNTERCLOCKWISE} COUNTERCLOCKWISE
+ * @final
+ */
+export const COUNTERCLOCKWISE = 'counterclockwise';
+/**
  * @typedef {'square'} PROJECT
  * @property {PROJECT} PROJECT
  * @final

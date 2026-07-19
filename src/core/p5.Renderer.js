@@ -183,6 +183,21 @@ class Renderer {
     this.currentShape.bezierVertex(position, textureCoordinates);
   }
 
+  arcVertex(w, h, angle, type, direction, x, y, u = 0, v = 0) {
+    const position = new Vector(x, y, 0);
+    const textureCoordinates = this.getSupportedIndividualVertexProperties()
+      .textureCoordinates
+      ? new Vector(u, v)
+      : undefined;
+    this.currentShape.arcVertex(position, textureCoordinates, {
+      w,
+      h,
+      angle,
+      type,
+      direction
+    });
+  }
+
   splineProperty(key, value) {
     if (value === undefined) {
       return this.states.splineProperties[key];
